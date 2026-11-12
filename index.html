@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Shenkottai CF Service Area Mapper</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css">
+<style>
+:root{--ink:#172033;--muted:#64748b;--line:#e2e8f0;--bg:#f3f6fb}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,Segoe UI,Arial,sans-serif}
+header{background:#102b68;color:white;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+header h1{font-size:19px;margin:0}header p{font-size:12px;color:#dbeafe;margin:3px 0 0}
+button,input,select{font:inherit}button{border:0;border-radius:8px;background:#1d4ed8;color:white;padding:9px 12px;font-weight:650;cursor:pointer}
+button.secondary{background:#e8eef8;color:#19345f}button.danger{background:#b91c1c}button:disabled{opacity:.45;cursor:not-allowed}
+.layout{display:grid;grid-template-columns:350px 1fr;gap:12px;padding:12px;min-height:calc(100vh - 66px)}
+.panel{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;overflow:auto;max-height:calc(100vh - 90px)}
+#map{height:calc(100vh - 90px);min-height:560px;border:1px solid var(--line);border-radius:12px;z-index:1}
+h2{font-size:15px;margin:0 0 9px}.section{border-bottom:1px solid var(--line);padding-bottom:13px;margin-bottom:13px}
+label{display:block;color:#475569;font-size:12px;font-weight:700;margin:9px 0 4px}
+input,select{width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:8px;background:white}
+.row{display:flex;gap:8px}.row>*{min-width:0;flex:1}.toolbar{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}
+.toolbar button{font-size:12px}.hint,.small{font-size:11px;color:var(--muted)}.hint{margin:7px 0}
+.status{padding:8px 10px;background:#eff6ff;color:#1e40af;border-radius:8px;font-size:12px;margin-top:8px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}.stat{background:#f8fafc;border:1px solid var(--line);padding:9px;border-radius:9px}.stat b{display:block;font-size:19px}.stat span{font-size:10px;color:var(--muted)}
+.list{max-height:260px;overflow:auto}.item{display:flex;justify-content:space-between;gap:8px;align-items:center;border-bottom:1px solid #f1f5f9;padding:7px 2px;font-size:12px}
+.item button{padding:5px 8px;font-size:11px}.chip{display:inline-block;border-radius:20px;padding:2px 7px;font-size:10px;font-weight:700}
+.legend{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0}.legend span{font-size:11px}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:4px}
+.leaflet-popup-content{font-size:12px}.leaflet-control-attribution{font-size:9px}
+@media(max-width:900px){.layout{grid-template-columns:1fr}.panel{order:2;max-height:none}#map{height:60vh;min-height:420px;order:1}}
+@media print{header,.panel{display:none!important}.layout{display:block;padding:0}#map{height:95vh;min-height:0;border:0}.leaflet-control{display:none!important}}
+</style>
+</head>
+<body>
+<header><div><h1>Shenkottai CF Service Area Mapper</h1><p>OpenStreetMap + Leaflet · CF / Neighbourhood Centre coverage</p></div>
+<div class="toolbar"><button class="secondary" id="print">Export / Print PDF</button><button class="secondary" id="export">Export JSON backup</button><button class="secondary" id="import">Import JSON</button><input id="file" type="file" accept="application/json" hidden></div></header>
+<div class="layout">
+<aside class="panel">
+<div class="section"><h2>Coverage structure</h2>
+<div class="legend"><span><i class="dot" style="background:#be287e"></i>CF-1 / NC-1</span><span><i class="dot" style="background:#c0392b"></i>CF-2 / NC-2</span><span><i class="dot" style="background:#2463c7"></i>CF-3 / NC-3</span></div>
+<div class="stats"><div class="stat"><b id="units">—</b><span>Coverage units</span></div><div class="stat"><b id="mapped">0</b><span>Boundaries drawn</span></div><div class="stat"><b id="area">0</b><span>Mapped km²</span></div></div>
+<p class="hint">Area is calculated from the polygons you draw. It is not an official survey area unless boundaries are verified.</p></div>
+<div class="section"><h2>Draw a coverage boundary</h2>
+<label>NC / CF</label><select id="nc"><option value="NC1">NC-1 · Ayikudi · CF-1</option><option value="NC2">NC-2 · Achamputhur · CF-2</option><option value="NC3">NC-3 · Shenkottai · CF-3</option></select>
+<label>Coverage locality / unit</label><select id="unit"></select>
+<label>CRW allocation (optional)</label><input id="crw" placeholder="Enter CRW name(s), if assigned">
+<div class="toolbar"><button id="saveUnit">Save allocation</button><button id="deleteUnit" class="danger">Delete selected boundary</button></div>
+<div class="status" id="drawstatus">Use the polygon tool on the map to draw a boundary. Use the edit tool to reshape it.</div>
+<p class="hint">The map's polygon and edit tools are in the upper-left corner of the map.</p></div>
+<div class="section"><h2>Place NC marker</h2><label>Neighbourhood Centre</label><select id="markerType"><option value="NC1">NC-1 · Ayikudi</option><option value="NC2">NC-2 · Achamputhur</option><option value="NC3">NC-3 · Shenkottai</option></select>
+<div class="toolbar"><button id="placeMarker">Place / move NC marker</button><button class="secondary" id="cancelMarker">Cancel</button></div><p class="hint">Click the map to position the selected NC marker at its actual location.</p></div>
+<div class="section"><h2>Coverage register</h2><div class="list" id="register"></div></div>
+<div class="section"><h2>NC markers</h2><div class="list" id="markers"></div></div>
+<p class="small">Data is stored in this browser. Export JSON backups regularly. Map tiles © OpenStreetMap contributors.</p>
+</aside>
+<div id="map"></div>
+</div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+<script>
+const CF={NC1:{cf:"CF-1",name:"Ayikudi",color:"#be287e"},NC2:{cf:"CF-2",name:"Achamputhur",color:"#c0392b"},NC3:{cf:"CF-3",name:"Shenkottai",color:"#2463c7"}};
+const units=[
+{ id:"ayikudi-town",nc:"NC1",name:"Ayikudi (Town Panchayat)",kind:"Town Panchayat"},
+{ id:"agarakattu",nc:"NC1",name:"Agarakattu",kind:"Village locality"},
+{ id:"ananthapuram",nc:"NC1",name:"Ananthapuram",kind:"Village locality"},
+{ id:"kambili",nc:"NC1",name:"Kambili",kind:"Village locality"},
+{ id:"varathan-gramam",nc:"NC1",name:"Varathan Gramam",kind:"Village locality"},
+{ id:"desiyanagar",nc:"NC1",name:"Desiyanagar",kind:"Village locality"},
+{ id:"thendral-nagar",nc:"NC1",name:"Thendral Nagar",kind:"Village locality"},
+{ id:"kilangadu",nc:"NC1",name:"Kilangadu",kind:"Village locality"},
+{ id:"vayalkattu-colony",nc:"NC1",name:"Vayalkattu Colony",kind:"Village locality"},
+{ id:"sembur",nc:"NC1",name:"Sembur",kind:"Village locality"},
+{ id:"balamarthanthapuram",nc:"NC1",name:"Balamarthanthapuram",kind:"Village locality"},
+{ id:"sambavarvadakarai",nc:"NC1",name:"Sambavarvadakarai",kind:"Village locality"},
+{ id:"melur",nc:"NC1",name:"Melur",kind:"Village locality"},
+{ id:"keelur",nc:"NC1",name:"Keelur",kind:"Village locality"},
+{ id:"poigai",nc:"NC1",name:"Poigai",kind:"Village locality"},
+{ id:"achamputhur-town",nc:"NC2",name:"Achamputhur (Town Panchayat)",kind:"Town Panchayat"},
+{ id:"mekkarai",nc:"NC2",name:"Mekkarai",kind:"Village locality"},
+{ id:"seevanallur",nc:"NC2",name:"Seevanallur",kind:"Village locality"},
+{ id:"thiruvettiyur",nc:"NC2",name:"Thiruvettiyur",kind:"Village locality"},
+{ id:"elathur",nc:"NC2",name:"Elathur",kind:"Village locality"},
+{ id:"shenkottai-municipality",nc:"NC3",name:"Shenkottai (Municipality)",kind:"Municipality"},
+{ id:"kaalankarai",nc:"NC3",name:"Kaalankarai",kind:"Village locality"},
+{ id:"puthur",nc:"NC3",name:"Puthur (Town Panchayat)",kind:"Town Panchayat"},
+{ id:"rettaikulam",nc:"NC3",name:"Rettaikulam",kind:"Village locality"},
+{ id:"moorndru-vaaikkal",nc:"NC3",name:"Moorndru Vaaikkal",kind:"Village locality"},
+{ id:"kaduvetti",nc:"NC3",name:"Kaduvetti",kind:"Village locality"},
+{ id:"kathiravan-colony",nc:"NC3",name:"Kathiravan Colony",kind:"Village locality"},
+{ id:"kannupuli-mettu",nc:"NC3",name:"Kannupuli Mettu",kind:"Village locality"},
+{ id:"nedunji",nc:"NC3",name:"Nedunji",kind:"Village locality"},
+{ id:"iraviyadharmapuram",nc:"NC3",name:"Iraviyadharmapuram",kind:"Village locality"},
+{ id:"poolankudiyiruppu",nc:"NC3",name:"Poolankudiyiruppu",kind:"Village locality"},
+{ id:"lalakudiyiruppu",nc:"NC3",name:"Lalakudiyiruppu",kind:"Village locality"},
+{ id:"kesavapuram",nc:"NC3",name:"Kesavapuram",kind:"Village locality"},
+{ id:"keelaputhur",nc:"NC3",name:"Keelaputhur",kind:"Village locality"},
+{ id:"melaputhur",nc:"NC3",name:"Melaputhur",kind:"Village locality"},
+{ id:"thavanai",nc:"NC3",name:"Thavanai",kind:"Village locality"},
+{ id:"karkudi",nc:"NC3",name:"Karkudi",kind:"Village locality"},
+{ id:"kattalaikudiyiruppu",nc:"NC3",name:"Kattalaikudiyiruppu",kind:"Village locality"},
+{ id:"vembanallur",nc:"NC3",name:"Vembanallur",kind:"Village locality"},
+{ id:"puliyarai",nc:"NC3",name:"Puliyarai",kind:"Village locality"},
+{ id:"bhavagathipuram",nc:"NC3",name:"Bhavagathipuram",kind:"Village locality"},
+{ id:"therkkumedu",nc:"NC3",name:"Therkkumedu",kind:"Village locality"}
+];
+const initial=()=>({boundaries:{},crw:{},markers:{}});
+let data=JSON.parse(localStorage.getItem("shenkottai_leaflet_data")||"null")||initial();
+let map,drawn=new L.FeatureGroup(),markerLayer=new L.FeatureGroup(),placing=false;
+const $=id=>document.getElementById(id);
+function save(){localStorage.setItem("shenkottai_leaflet_data",JSON.stringify(data));render()}
+function unitById(id){return units.find(u=>u.id===id)}
+function areaM2(feature){try{return turf.area(feature)}catch(e){return 0}}
+function fmt(m){return m>=1e6?(m/1e6).toFixed(3)+" km²":Math.round(m).toLocaleString()+" m²"}
+function styleFor(nc){return {color:CF[nc].color,weight:2,opacity:1,fillColor:CF[nc].color,fillOpacity:.2}}
+function featureFor(layer,id){const gj=layer.toGeoJSON();gj.properties={...(gj.properties||{}),unitId:id};return gj}
+function refreshMap(){drawn.clearLayers();Object.entries(data.boundaries).forEach(([id,gj])=>{const u=unitById(id);if(!u)return;const layer=L.geoJSON(gj,{style:styleFor(u.nc),onEachFeature:(f,l)=>l.bindPopup(`<b>${u.name}</b><br>${u.nc.replace("NC","NC-")} · ${CF[u.nc].cf}<br>Area: ${fmt(areaM2(gj))}<br>CRW: ${data.crw[id]||"Not assigned"}`)});layer.eachLayer(l=>drawn.addLayer(l))});markerLayer.clearLayers();Object.entries(data.markers).forEach(([nc,pos])=>{const m=L.marker([pos.lat,pos.lng]).bindPopup(`<b>${nc.replace("NC","NC-")}</b> · ${CF[nc].name}<br>${CF[nc].cf}`);markerLayer.addLayer(m)});updateStats()}
+function render(){
+ const nc=$("nc").value||"NC1", current=$("unit").value;
+ $("unit").innerHTML=units.filter(u=>u.nc===nc).map(u=>`<option value="${u.id}">${u.name}</option>`).join("");
+ if(current&&unitById(current)?.nc===nc)$("unit").value=current;
+ $("crw").value=data.crw[$("unit").value]||"";
+ const drawnCount=Object.keys(data.boundaries).length;
+ const totalArea=Object.values(data.boundaries).reduce((s,g)=>s+areaM2(g),0);
+ $("units").textContent=units.length;$("mapped").textContent=drawnCount;$("area").textContent=(totalArea/1e6).toFixed(2);
+ $("register").innerHTML=["NC1","NC2","NC3"].map(n=>`<div style="padding:6px 0;border-bottom:1px solid #eee"><b style="color:${CF[n].color}">${n.replace("NC","NC-")} / ${CF[n].cf} · ${CF[n].name}</b></div>`+units.filter(u=>u.nc===n).map(u=>`<div class="item"><span>${u.name}<br><span class="small">${data.boundaries[u.id]?fmt(areaM2(data.boundaries[u.id])):"Not mapped"} · CRW: ${data.crw[u.id]||"—"}</span></span><button class="secondary" data-pick="${u.id}">Select</button></div>`).join("")).join("");
+ document.querySelectorAll("[data-pick]").forEach(b=>b.onclick=()=>{const u=unitById(b.dataset.pick);$("nc").value=u.nc;render();$("unit").value=u.id;$("crw").value=data.crw[u.id]||"";map.fitBounds(data.boundaries[u.id]?L.geoJSON(data.boundaries[u.id]).getBounds():map.getBounds())});
+ $("markers").innerHTML=["NC1","NC2","NC3"].map(n=>`<div class="item"><span><b style="color:${CF[n].color}">${n.replace("NC","NC-")} · ${CF[n].name}</b><br><span class="small">${data.markers[n]?"Marker placed":"Not placed"}</span></span><button class="secondary" data-marker="${n}">Locate</button></div>`).join("");
+ document.querySelectorAll("[data-marker]").forEach(b=>b.onclick=()=>{const pos=data.markers[b.dataset.marker];if(pos)map.setView([pos.lat,pos.lng],16)});
+}
+$("nc").onchange=()=>{render()};
+$("unit").onchange=()=>{$("crw").value=data.crw[$("unit").value]||""};
+$("saveUnit").onclick=()=>{const id=$("unit").value;data.crw[id]=$("crw").value.trim();const nc=unitById(id).nc;if(data.boundaries[id]){data.boundaries[id].properties={...(data.boundaries[id].properties||{}),crw:data.crw[id],nc};refreshMap()}save();$("drawstatus").textContent="CRW allocation saved for selected locality."};
+$("deleteUnit").onclick=()=>{const id=$("unit").value;if(!data.boundaries[id]){alert("No boundary saved for this locality.");return}if(confirm("Delete boundary for "+unitById(id).name+"?")){delete data.boundaries[id];save();refreshMap()}};
+$("placeMarker").onclick=()=>{placing=true;$("drawstatus").textContent="Click the map to place "+$("markerType").value+" at its actual location."};
+$("cancelMarker").onclick=()=>{placing=false;$("drawstatus").textContent="Marker placement cancelled."};
+map=L.map("map").setView([8.998,77.25],13);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'}).addTo(map);
+drawn.addTo(map);markerLayer.addTo(map);
+const drawControl=new L.Control.Draw({position:"topleft",draw:{polyline:false,rectangle:false,circle:false,circlemarker:false,marker:false,polygon:{allowIntersection:false,showArea:false,shapeOptions:{color:"#be287e",fillOpacity:.2}}},edit:{featureGroup:drawn,edit:true,remove:false}});map.addControl(drawControl);
+map.on(L.Draw.Event.CREATED,e=>{const id=$("unit").value,u=unitById(id);if(!u){alert("Select a coverage locality first.");return}const gj=featureFor(e.layer,id);data.boundaries[id]=gj;save();refreshMap();$("drawstatus").textContent="Boundary saved for "+u.name+". Use the edit tool to adjust vertices."});
+map.on(L.Draw.Event.EDITED,e=>{e.layers.eachLayer(l=>{const gj=l.toGeoJSON(),id=gj.properties?.unitId||$("unit").value;if(unitById(id))data.boundaries[id]=featureFor(l,id)});save();refreshMap();$("drawstatus").textContent="Boundary edits saved."});
+map.on("click",e=>{if(!placing)return;const nc=$("markerType").value;data.markers[nc]={lat:e.latlng.lat,lng:e.latlng.lng};placing=false;save();refreshMap();$("drawstatus").textContent=nc+" marker positioned."});
+$("print").onclick=()=>window.print();
+$("export").onclick=()=>{const blob=new Blob([JSON.stringify({version:1,block:"Shenkottai",units,data},null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="Shenkottai_CF_Map_Backup.json";a.click();URL.revokeObjectURL(a.href)};
+$("import").onclick=()=>$("file").click();
+$("file").onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const j=JSON.parse(await f.text());const incoming=j.data||j;if(!incoming.boundaries||!incoming.crw||!incoming.markers)throw Error();data=incoming;save();refreshMap();alert("Backup imported.")}catch(err){alert("Could not import this JSON backup.")}e.target.value=""};
+render();refreshMap();
+</script>
+</body></html>
