@@ -1,149 +1,1379 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Shenkottai CF Service Area Mapper</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css">
-<style>
-:root{--ink:#172033;--muted:#64748b;--line:#e2e8f0;--bg:#f3f6fb}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,Segoe UI,Arial,sans-serif}
-header{background:#102b68;color:white;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
-header h1{font-size:19px;margin:0}header p{font-size:12px;color:#dbeafe;margin:3px 0 0}
-button,input,select{font:inherit}button{border:0;border-radius:8px;background:#1d4ed8;color:white;padding:9px 12px;font-weight:650;cursor:pointer}
-button.secondary{background:#e8eef8;color:#19345f}button.danger{background:#b91c1c}button:disabled{opacity:.45;cursor:not-allowed}
-.layout{display:grid;grid-template-columns:350px 1fr;gap:12px;padding:12px;min-height:calc(100vh - 66px)}
-.panel{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;overflow:auto;max-height:calc(100vh - 90px)}
-#map{height:calc(100vh - 90px);min-height:560px;border:1px solid var(--line);border-radius:12px;z-index:1}
-h2{font-size:15px;margin:0 0 9px}.section{border-bottom:1px solid var(--line);padding-bottom:13px;margin-bottom:13px}
-label{display:block;color:#475569;font-size:12px;font-weight:700;margin:9px 0 4px}
-input,select{width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:8px;background:white}
-.row{display:flex;gap:8px}.row>*{min-width:0;flex:1}.toolbar{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}
-.toolbar button{font-size:12px}.hint,.small{font-size:11px;color:var(--muted)}.hint{margin:7px 0}
-.status{padding:8px 10px;background:#eff6ff;color:#1e40af;border-radius:8px;font-size:12px;margin-top:8px}
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}.stat{background:#f8fafc;border:1px solid var(--line);padding:9px;border-radius:9px}.stat b{display:block;font-size:19px}.stat span{font-size:10px;color:var(--muted)}
-.list{max-height:260px;overflow:auto}.item{display:flex;justify-content:space-between;gap:8px;align-items:center;border-bottom:1px solid #f1f5f9;padding:7px 2px;font-size:12px}
-.item button{padding:5px 8px;font-size:11px}.chip{display:inline-block;border-radius:20px;padding:2px 7px;font-size:10px;font-weight:700}
-.legend{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0}.legend span{font-size:11px}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:4px}
-.leaflet-popup-content{font-size:12px}.leaflet-control-attribution{font-size:9px}
-@media(max-width:900px){.layout{grid-template-columns:1fr}.panel{order:2;max-height:none}#map{height:60vh;min-height:420px;order:1}}
-@media print{header,.panel{display:none!important}.layout{display:block;padding:0}#map{height:95vh;min-height:0;border:0}.leaflet-control{display:none!important}}
-</style>
-</head>
-<body>
-<header><div><h1>Shenkottai CF Service Area Mapper</h1><p>OpenStreetMap + Leaflet · CF / Neighbourhood Centre coverage</p></div>
-<div class="toolbar"><button class="secondary" id="print">Export / Print PDF</button><button class="secondary" id="export">Export JSON backup</button><button class="secondary" id="import">Import JSON</button><input id="file" type="file" accept="application/json" hidden></div></header>
-<div class="layout">
-<aside class="panel">
-<div class="section"><h2>Coverage structure</h2>
-<div class="legend"><span><i class="dot" style="background:#be287e"></i>CF-1 / NC-1</span><span><i class="dot" style="background:#c0392b"></i>CF-2 / NC-2</span><span><i class="dot" style="background:#2463c7"></i>CF-3 / NC-3</span></div>
-<div class="stats"><div class="stat"><b id="units">—</b><span>Coverage units</span></div><div class="stat"><b id="mapped">0</b><span>Boundaries drawn</span></div><div class="stat"><b id="area">0</b><span>Mapped km²</span></div></div>
-<p class="hint">Area is calculated from the polygons you draw. It is not an official survey area unless boundaries are verified.</p></div>
-<div class="section"><h2>Draw a coverage boundary</h2>
-<label>NC / CF</label><select id="nc"><option value="NC1">NC-1 · Ayikudi · CF-1</option><option value="NC2">NC-2 · Achamputhur · CF-2</option><option value="NC3">NC-3 · Shenkottai · CF-3</option></select>
-<label>Coverage locality / unit</label><select id="unit"></select>
-<label>CRW allocation (optional)</label><input id="crw" placeholder="Enter CRW name(s), if assigned">
-<div class="toolbar"><button id="saveUnit">Save allocation</button><button id="deleteUnit" class="danger">Delete selected boundary</button></div>
-<div class="status" id="drawstatus">Use the polygon tool on the map to draw a boundary. Use the edit tool to reshape it.</div>
-<p class="hint">The map's polygon and edit tools are in the upper-left corner of the map.</p></div>
-<div class="section"><h2>Place NC marker</h2><label>Neighbourhood Centre</label><select id="markerType"><option value="NC1">NC-1 · Ayikudi</option><option value="NC2">NC-2 · Achamputhur</option><option value="NC3">NC-3 · Shenkottai</option></select>
-<div class="toolbar"><button id="placeMarker">Place / move NC marker</button><button class="secondary" id="cancelMarker">Cancel</button></div><p class="hint">Click the map to position the selected NC marker at its actual location.</p></div>
-<div class="section"><h2>Coverage register</h2><div class="list" id="register"></div></div>
-<div class="section"><h2>NC markers</h2><div class="list" id="markers"></div></div>
-<p class="small">Data is stored in this browser. Export JSON backups regularly. Map tiles © OpenStreetMap contributors.</p>
-</aside>
-<div id="map"></div>
-</div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
-<script>
-const CF={NC1:{cf:"CF-1",name:"Ayikudi",color:"#be287e"},NC2:{cf:"CF-2",name:"Achamputhur",color:"#c0392b"},NC3:{cf:"CF-3",name:"Shenkottai",color:"#2463c7"}};
-const units=[
-{ id:"ayikudi-town",nc:"NC1",name:"Ayikudi (Town Panchayat)",kind:"Town Panchayat"},
-{ id:"agarakattu",nc:"NC1",name:"Agarakattu",kind:"Village locality"},
-{ id:"ananthapuram",nc:"NC1",name:"Ananthapuram",kind:"Village locality"},
-{ id:"kambili",nc:"NC1",name:"Kambili",kind:"Village locality"},
-{ id:"varathan-gramam",nc:"NC1",name:"Varathan Gramam",kind:"Village locality"},
-{ id:"desiyanagar",nc:"NC1",name:"Desiyanagar",kind:"Village locality"},
-{ id:"thendral-nagar",nc:"NC1",name:"Thendral Nagar",kind:"Village locality"},
-{ id:"kilangadu",nc:"NC1",name:"Kilangadu",kind:"Village locality"},
-{ id:"vayalkattu-colony",nc:"NC1",name:"Vayalkattu Colony",kind:"Village locality"},
-{ id:"sembur",nc:"NC1",name:"Sembur",kind:"Village locality"},
-{ id:"balamarthanthapuram",nc:"NC1",name:"Balamarthanthapuram",kind:"Village locality"},
-{ id:"sambavarvadakarai",nc:"NC1",name:"Sambavarvadakarai",kind:"Village locality"},
-{ id:"melur",nc:"NC1",name:"Melur",kind:"Village locality"},
-{ id:"keelur",nc:"NC1",name:"Keelur",kind:"Village locality"},
-{ id:"poigai",nc:"NC1",name:"Poigai",kind:"Village locality"},
-{ id:"achamputhur-town",nc:"NC2",name:"Achamputhur (Town Panchayat)",kind:"Town Panchayat"},
-{ id:"mekkarai",nc:"NC2",name:"Mekkarai",kind:"Village locality"},
-{ id:"seevanallur",nc:"NC2",name:"Seevanallur",kind:"Village locality"},
-{ id:"thiruvettiyur",nc:"NC2",name:"Thiruvettiyur",kind:"Village locality"},
-{ id:"elathur",nc:"NC2",name:"Elathur",kind:"Village locality"},
-{ id:"shenkottai-municipality",nc:"NC3",name:"Shenkottai (Municipality)",kind:"Municipality"},
-{ id:"kaalankarai",nc:"NC3",name:"Kaalankarai",kind:"Village locality"},
-{ id:"puthur",nc:"NC3",name:"Puthur (Town Panchayat)",kind:"Town Panchayat"},
-{ id:"rettaikulam",nc:"NC3",name:"Rettaikulam",kind:"Village locality"},
-{ id:"moorndru-vaaikkal",nc:"NC3",name:"Moorndru Vaaikkal",kind:"Village locality"},
-{ id:"kaduvetti",nc:"NC3",name:"Kaduvetti",kind:"Village locality"},
-{ id:"kathiravan-colony",nc:"NC3",name:"Kathiravan Colony",kind:"Village locality"},
-{ id:"kannupuli-mettu",nc:"NC3",name:"Kannupuli Mettu",kind:"Village locality"},
-{ id:"nedunji",nc:"NC3",name:"Nedunji",kind:"Village locality"},
-{ id:"iraviyadharmapuram",nc:"NC3",name:"Iraviyadharmapuram",kind:"Village locality"},
-{ id:"poolankudiyiruppu",nc:"NC3",name:"Poolankudiyiruppu",kind:"Village locality"},
-{ id:"lalakudiyiruppu",nc:"NC3",name:"Lalakudiyiruppu",kind:"Village locality"},
-{ id:"kesavapuram",nc:"NC3",name:"Kesavapuram",kind:"Village locality"},
-{ id:"keelaputhur",nc:"NC3",name:"Keelaputhur",kind:"Village locality"},
-{ id:"melaputhur",nc:"NC3",name:"Melaputhur",kind:"Village locality"},
-{ id:"thavanai",nc:"NC3",name:"Thavanai",kind:"Village locality"},
-{ id:"karkudi",nc:"NC3",name:"Karkudi",kind:"Village locality"},
-{ id:"kattalaikudiyiruppu",nc:"NC3",name:"Kattalaikudiyiruppu",kind:"Village locality"},
-{ id:"vembanallur",nc:"NC3",name:"Vembanallur",kind:"Village locality"},
-{ id:"puliyarai",nc:"NC3",name:"Puliyarai",kind:"Village locality"},
-{ id:"bhavagathipuram",nc:"NC3",name:"Bhavagathipuram",kind:"Village locality"},
-{ id:"therkkumedu",nc:"NC3",name:"Therkkumedu",kind:"Village locality"}
-];
-const initial=()=>({boundaries:{},crw:{},markers:{}});
-let data=JSON.parse(localStorage.getItem("shenkottai_leaflet_data")||"null")||initial();
-let map,drawn=new L.FeatureGroup(),markerLayer=new L.FeatureGroup(),placing=false;
-const $=id=>document.getElementById(id);
-function save(){localStorage.setItem("shenkottai_leaflet_data",JSON.stringify(data));render()}
-function unitById(id){return units.find(u=>u.id===id)}
-function areaM2(feature){try{return turf.area(feature)}catch(e){return 0}}
-function fmt(m){return m>=1e6?(m/1e6).toFixed(3)+" km²":Math.round(m).toLocaleString()+" m²"}
-function styleFor(nc){return {color:CF[nc].color,weight:2,opacity:1,fillColor:CF[nc].color,fillOpacity:.2}}
-function featureFor(layer,id){const gj=layer.toGeoJSON();gj.properties={...(gj.properties||{}),unitId:id};return gj}
-function refreshMap(){drawn.clearLayers();Object.entries(data.boundaries).forEach(([id,gj])=>{const u=unitById(id);if(!u)return;const layer=L.geoJSON(gj,{style:styleFor(u.nc),onEachFeature:(f,l)=>l.bindPopup(`<b>${u.name}</b><br>${u.nc.replace("NC","NC-")} · ${CF[u.nc].cf}<br>Area: ${fmt(areaM2(gj))}<br>CRW: ${data.crw[id]||"Not assigned"}`)});layer.eachLayer(l=>drawn.addLayer(l))});markerLayer.clearLayers();Object.entries(data.markers).forEach(([nc,pos])=>{const m=L.marker([pos.lat,pos.lng]).bindPopup(`<b>${nc.replace("NC","NC-")}</b> · ${CF[nc].name}<br>${CF[nc].cf}`);markerLayer.addLayer(m)});updateStats()}
-function render(){
- const nc=$("nc").value||"NC1", current=$("unit").value;
- $("unit").innerHTML=units.filter(u=>u.nc===nc).map(u=>`<option value="${u.id}">${u.name}</option>`).join("");
- if(current&&unitById(current)?.nc===nc)$("unit").value=current;
- $("crw").value=data.crw[$("unit").value]||"";
- const drawnCount=Object.keys(data.boundaries).length;
- const totalArea=Object.values(data.boundaries).reduce((s,g)=>s+areaM2(g),0);
- $("units").textContent=units.length;$("mapped").textContent=drawnCount;$("area").textContent=(totalArea/1e6).toFixed(2);
- $("register").innerHTML=["NC1","NC2","NC3"].map(n=>`<div style="padding:6px 0;border-bottom:1px solid #eee"><b style="color:${CF[n].color}">${n.replace("NC","NC-")} / ${CF[n].cf} · ${CF[n].name}</b></div>`+units.filter(u=>u.nc===n).map(u=>`<div class="item"><span>${u.name}<br><span class="small">${data.boundaries[u.id]?fmt(areaM2(data.boundaries[u.id])):"Not mapped"} · CRW: ${data.crw[u.id]||"—"}</span></span><button class="secondary" data-pick="${u.id}">Select</button></div>`).join("")).join("");
- document.querySelectorAll("[data-pick]").forEach(b=>b.onclick=()=>{const u=unitById(b.dataset.pick);$("nc").value=u.nc;render();$("unit").value=u.id;$("crw").value=data.crw[u.id]||"";map.fitBounds(data.boundaries[u.id]?L.geoJSON(data.boundaries[u.id]).getBounds():map.getBounds())});
- $("markers").innerHTML=["NC1","NC2","NC3"].map(n=>`<div class="item"><span><b style="color:${CF[n].color}">${n.replace("NC","NC-")} · ${CF[n].name}</b><br><span class="small">${data.markers[n]?"Marker placed":"Not placed"}</span></span><button class="secondary" data-marker="${n}">Locate</button></div>`).join("");
- document.querySelectorAll("[data-marker]").forEach(b=>b.onclick=()=>{const pos=data.markers[b.dataset.marker];if(pos)map.setView([pos.lat,pos.lng],16)});
-}
-$("nc").onchange=()=>{render()};
-$("unit").onchange=()=>{$("crw").value=data.crw[$("unit").value]||""};
-$("saveUnit").onclick=()=>{const id=$("unit").value;data.crw[id]=$("crw").value.trim();const nc=unitById(id).nc;if(data.boundaries[id]){data.boundaries[id].properties={...(data.boundaries[id].properties||{}),crw:data.crw[id],nc};refreshMap()}save();$("drawstatus").textContent="CRW allocation saved for selected locality."};
-$("deleteUnit").onclick=()=>{const id=$("unit").value;if(!data.boundaries[id]){alert("No boundary saved for this locality.");return}if(confirm("Delete boundary for "+unitById(id).name+"?")){delete data.boundaries[id];save();refreshMap()}};
-$("placeMarker").onclick=()=>{placing=true;$("drawstatus").textContent="Click the map to place "+$("markerType").value+" at its actual location."};
-$("cancelMarker").onclick=()=>{placing=false;$("drawstatus").textContent="Marker placement cancelled."};
-map=L.map("map").setView([8.998,77.25],13);
-L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'}).addTo(map);
-drawn.addTo(map);markerLayer.addTo(map);
-const drawControl=new L.Control.Draw({position:"topleft",draw:{polyline:false,rectangle:false,circle:false,circlemarker:false,marker:false,polygon:{allowIntersection:false,showArea:false,shapeOptions:{color:"#be287e",fillOpacity:.2}}},edit:{featureGroup:drawn,edit:true,remove:false}});map.addControl(drawControl);
-map.on(L.Draw.Event.CREATED,e=>{const id=$("unit").value,u=unitById(id);if(!u){alert("Select a coverage locality first.");return}const gj=featureFor(e.layer,id);data.boundaries[id]=gj;save();refreshMap();$("drawstatus").textContent="Boundary saved for "+u.name+". Use the edit tool to adjust vertices."});
-map.on(L.Draw.Event.EDITED,e=>{e.layers.eachLayer(l=>{const gj=l.toGeoJSON(),id=gj.properties?.unitId||$("unit").value;if(unitById(id))data.boundaries[id]=featureFor(l,id)});save();refreshMap();$("drawstatus").textContent="Boundary edits saved."});
-map.on("click",e=>{if(!placing)return;const nc=$("markerType").value;data.markers[nc]={lat:e.latlng.lat,lng:e.latlng.lng};placing=false;save();refreshMap();$("drawstatus").textContent=nc+" marker positioned."});
-$("print").onclick=()=>window.print();
-$("export").onclick=()=>{const blob=new Blob([JSON.stringify({version:1,block:"Shenkottai",units,data},null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="Shenkottai_CF_Map_Backup.json";a.click();URL.revokeObjectURL(a.href)};
-$("import").onclick=()=>$("file").click();
-$("file").onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const j=JSON.parse(await f.text());const incoming=j.data||j;if(!incoming.boundaries||!incoming.crw||!incoming.markers)throw Error();data=incoming;save();refreshMap();alert("Backup imported.")}catch(err){alert("Could not import this JSON backup.")}e.target.value=""};
-render();refreshMap();
-</script>
-</body></html>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width,initial-scale=1">
+        <title>Shenkottai CF Service Area Mapper · V5</title>
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+        <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css">
+        <style>
+            :root {
+                --ink: #172033;
+                --muted: #64748b;
+                --line: #dce3ee;
+                --bg: #f3f6fb;
+                --navy: #102b68
+            }
+
+            * {
+                box-sizing: border-box
+            }
+
+            body {
+                margin: 0;
+                background: var(--bg);
+                color: var(--ink);
+                font: 14px/1.45 system-ui,Segoe UI,Arial,sans-serif
+            }
+
+            header {
+                background: var(--navy);
+                color: white;
+                padding: 13px 18px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                gap: 12px;
+                flex-wrap: wrap
+            }
+
+            header h1 {
+                font-size: 19px;
+                margin: 0
+            }
+
+            header p {
+                font-size: 12px;
+                color: #dbeafe;
+                margin: 3px 0 0
+            }
+
+            button,input,select {
+                font: inherit
+            }
+
+            button {
+                border: 0;
+                border-radius: 8px;
+                background: #1d4ed8;
+                color: white;
+                padding: 8px 11px;
+                font-weight: 650;
+                cursor: pointer
+            }
+
+            button.secondary {
+                background: #e8eef8;
+                color: #19345f
+            }
+
+            button.danger {
+                background: #b91c1c
+            }
+
+            button:disabled {
+                opacity: .4;
+                cursor: not-allowed
+            }
+
+            .topactions {
+                display: flex;
+                gap: 6px;
+                flex-wrap: wrap
+            }
+
+            .topactions button {
+                font-size: 12px
+            }
+
+            .layout {
+                display: grid;
+                grid-template-columns: 365px minmax(0,1fr);
+                gap: 11px;
+                padding: 11px;
+                min-height: calc(100vh - 65px)
+            }
+
+            .panel {
+                background: #fff;
+                border: 1px solid var(--line);
+                border-radius: 12px;
+                padding: 13px;
+                overflow: auto;
+                max-height: calc(100vh - 87px)
+            }
+
+            #map {
+                height: calc(100vh - 87px);
+                min-height: 570px;
+                border: 1px solid var(--line);
+                border-radius: 12px;
+                z-index: 1
+            }
+
+            h2 {
+                font-size: 14px;
+                margin: 0 0 9px
+            }
+
+            .section {
+                border-bottom: 1px solid var(--line);
+                padding-bottom: 12px;
+                margin-bottom: 12px
+            }
+
+            label {
+                display: block;
+                color: #475569;
+                font-size: 11px;
+                font-weight: 750;
+                margin: 8px 0 4px
+            }
+
+            input,select {
+                width: 100%;
+                padding: 8px;
+                border: 1px solid #cbd5e1;
+                border-radius: 8px;
+                background: white;
+                min-width: 0
+            }
+
+            .row {
+                display: flex;
+                gap: 7px
+            }
+
+            .row>* {
+                min-width: 0;
+                flex: 1
+            }
+
+            .toolbar {
+                display: flex;
+                gap: 6px;
+                flex-wrap: wrap;
+                margin-top: 8px
+            }
+
+            .toolbar button {
+                font-size: 11px
+            }
+
+            .hint,.small {
+                font-size: 11px;
+                color: var(--muted)
+            }
+
+            .hint {
+                margin: 6px 0
+            }
+
+            .status {
+                padding: 8px 10px;
+                background: #eff6ff;
+                color: #1e40af;
+                border-radius: 8px;
+                font-size: 11px;
+                margin-top: 8px
+            }
+
+            .stats {
+                display: grid;
+                grid-template-columns: repeat(2,1fr);
+                gap: 7px
+            }
+
+            .stat {
+                background: #f8fafc;
+                border: 1px solid var(--line);
+                padding: 8px;
+                border-radius: 9px
+            }
+
+            .stat b {
+                display: block;
+                font-size: 20px
+            }
+
+            .stat span {
+                font-size: 10px;
+                color: var(--muted)
+            }
+
+            .progress {
+                height: 9px;
+                background: #e8edf5;
+                border-radius: 9px;
+                overflow: hidden;
+                margin-top: 5px
+            }
+
+            .progress>i {
+                display: block;
+                height: 100%;
+                background: #16834b;
+                width: 0
+            }
+
+            .list {
+                max-height: 220px;
+                overflow: auto
+            }
+
+            .item {
+                display: flex;
+                justify-content: space-between;
+                gap: 6px;
+                align-items: center;
+                border-bottom: 1px solid #f1f5f9;
+                padding: 6px 1px;
+                font-size: 11px
+            }
+
+            .item button {
+                padding: 4px 7px;
+                font-size: 10px
+            }
+
+            .legend {
+                display: flex;
+                gap: 9px;
+                flex-wrap: wrap
+            }
+
+            .legend span {
+                font-size: 10px
+            }
+
+            .dot {
+                display: inline-block;
+                width: 9px;
+                height: 9px;
+                border-radius: 50%;
+                margin-right: 4px
+            }
+
+            .toggle {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                font-size: 11px;
+                margin: 5px 0
+            }
+
+            .toggle input {
+                width: auto
+            }
+
+            .measureout {
+                background: #f8fafc;
+                border: 1px solid var(--line);
+                padding: 8px;
+                border-radius: 8px;
+                font-size: 12px
+            }
+
+            .leaflet-tooltip.locality-label {
+                background: #fff;
+                border: 1px solid #64748b;
+                color: #172033;
+                box-shadow: 0 1px 5px #0002;
+                font-weight: 700;
+                font-size: 10px;
+                padding: 2px 5px
+            }
+
+            .leaflet-control-attribution {
+                font-size: 9px
+            }
+
+            @media(max-width: 900px) {
+                .layout {
+                    grid-template-columns:1fr
+                }
+
+                .panel {
+                    order: 2;
+                    max-height: none
+                }
+
+                #map {
+                    height: 58vh;
+                    min-height: 400px;
+                    order: 1
+                }
+            }
+
+            @media print {
+                header,.panel,.leaflet-control {
+                    display: none!important
+                }
+
+                .layout {
+                    display: block;
+                    padding: 0
+                }
+
+                #map {
+                    height: 92vh;
+                    min-height: 0;
+                    border: 0
+                }
+
+                .leaflet-tooltip.locality-label {
+                    display: block!important
+                }
+
+                body {
+                    background: white
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <header>
+            <div>
+                <h1>Shenkottai CF Service Area Mapper</h1>
+                <p>Version 5 · OpenStreetMap + Leaflet · CF / Neighbourhood Centre coverage</p>
+            </div>
+            <div class="topactions">
+                <button class="secondary" id="undo" disabled>↶ Undo</button>
+                <button class="secondary" id="redo" disabled>↷ Redo</button>
+                <button class="secondary" id="print">PDF / Print</button>
+                <button class="secondary" id="exportJson">Export JSON</button>
+                <button class="secondary" id="importJson">Import JSON</button>
+                <input id="jsonFile" type="file" accept=".json,.geojson,.kml,.xml" hidden>
+            </div>
+        </header>
+        <div class="layout">
+            <aside class="panel">
+                <div class="section">
+                    <h2>Coverage dashboard</h2>
+                    <div class="stats">
+                        <div class="stat">
+                            <b id="totalUnits">42</b>
+                            <span>Coverage localities</span>
+                        </div>
+                        <div class="stat">
+                            <b id="mappedUnits">0</b>
+                            <span>Boundaries mapped</span>
+                        </div>
+                        <div class="stat">
+                            <b id="progressPct">0%</b>
+                            <span>Mapping progress</span>
+                            <div class="progress">
+                                <i id="progressBar"></i>
+                            </div>
+                        </div>
+                        <div class="stat">
+                            <b id="totalArea">0.00</b>
+                            <span>Mapped area · km²</span>
+                        </div>
+                    </div>
+                    <div class="legend" style="margin-top:9px">
+                        <span>
+                            <i class="dot" style="background:#be287e"></i>CF-1 / NC-1
+                        </span>
+                        <span>
+                            <i class="dot" style="background:#c0392b"></i>CF-2 / NC-2
+                        </span>
+                        <span>
+                            <i class="dot" style="background:#2463c7"></i>CF-3 / NC-3
+                        </span>
+                    </div>
+                </div>
+                <div class="section">
+                    <h2>Find locality</h2>
+                    <input id="search" list="localityOptions" placeholder="Type a locality name…">
+                    <datalist id="localityOptions"></datalist>
+                    <div class="toolbar">
+                        <button id="findBtn">Find & zoom</button>
+                        <button class="secondary" id="clearSearch">Clear</button>
+                    </div>
+                </div>
+                <div class="section">
+                    <h2>Map layers</h2>
+                    <label class="toggle">
+                        <input type="checkbox" id="showNC1" checked>CF-1 / NC-1 boundaries
+                    </label>
+                    <label class="toggle">
+                        <input type="checkbox" id="showNC2" checked>CF-2 / NC-2 boundaries
+                    </label>
+                    <label class="toggle">
+                        <input type="checkbox" id="showNC3" checked>CF-3 / NC-3 boundaries
+                    </label>
+                    <label class="toggle">
+                        <input type="checkbox" id="showMarkers" checked>NC markers
+                    </label>
+                    <label class="toggle">
+                        <input type="checkbox" id="showLabels" checked>Locality labels
+                    </label>
+                    <div class="toolbar">
+                        <button class="secondary" id="street">Street map</button>
+                        <button class="secondary" id="satellite">Satellite*</button>
+                    </div>
+                    <p class="hint">*Satellite layer uses Esri World Imagery. Availability and usage are subject to provider terms.</p>
+                </div>
+                <div class="section">
+                    <h2>Boundary drawing & editing</h2>
+                    <label>NC / CF</label>
+                    <select id="nc">
+                        <option value="NC1">NC-1 · Ayikudi · CF-1</option>
+                        <option value="NC2">NC-2 · Achamputhur · CF-2</option>
+                        <option value="NC3">NC-3 · Shenkottai · CF-3</option>
+                    </select>
+                    <label>Locality / coverage unit</label>
+                    <select id="unit"></select>
+                    <label>CRW allocation</label>
+                    <input id="crw" placeholder="Enter CRW name(s), if assigned">
+                    <label class="toggle">
+                        <input type="checkbox" id="snap" checked>Snap nearby vertices (12 px)
+                    </label>
+                    <div class="toolbar">
+                        <button id="saveAllocation">Save allocation</button>
+                        <button class="danger" id="deleteBoundary">Delete boundary</button>
+                    </div>
+                    <div id="drawStatus" class="status">Select a locality, then use the polygon tool on the map. Use edit mode to reshape vertices.</div>
+                    <p class="hint">Polygon, edit and delete tools are at the upper-left of the map. Snapping aligns nearby vertices after drawing/editing.</p>
+                </div>
+                <div class="section">
+                    <h2>Measure distance</h2>
+                    <div class="toolbar">
+                        <button id="measureStart">Start measuring</button>
+                        <button class="secondary" id="measureClear">Clear measurement</button>
+                    </div>
+                    <div class="measureout" id="measureOut">No measurement yet. Click points on the map after starting.</div>
+                </div>
+                <div class="section">
+                    <h2>Import / export geographical data</h2>
+                    <div class="toolbar">
+                        <button class="secondary" id="importGeo">Import GeoJSON / KML</button>
+                        <button class="secondary" id="exportGeo">Export GeoJSON</button>
+                        <button class="secondary" id="exportKml">Export KML</button>
+                    </div>
+                    <div class="toolbar">
+                        <button class="secondary" id="importExcel">Import Excel</button>
+                        <button class="secondary" id="exportExcel">Export Excel</button>
+                        <input id="excelFile" type="file" accept=".xlsx,.xls,.csv" hidden>
+                    </div>
+                    <p class="hint">Excel import updates locality/CRW fields by matching locality name; it does not create boundaries unless the file contains GeoJSON/KML geometry.</p>
+                </div>
+                <div class="section">
+                    <h2>Coverage register</h2>
+                    <div class="list" id="register"></div>
+                </div>
+                <div class="section">
+                    <h2>NC service markers</h2>
+                    <label>Choose NC</label>
+                    <select id="markerType">
+                        <option value="NC1">NC-1 · Ayikudi</option>
+                        <option value="NC2">NC-2 · Achamputhur</option>
+                        <option value="NC3">NC-3 · Shenkottai</option>
+                    </select>
+                    <div class="toolbar">
+                        <button id="placeMarker">Place / move marker</button>
+                        <button class="secondary" id="cancelMarker">Cancel</button>
+                    </div>
+                    <div id="markerList" class="small"></div>
+                </div>
+                <p class="small">Auto-saves in this browser. Export JSON regularly. Public map tiles need internet. Map data © OpenStreetMap contributors.</p>
+            </aside>
+            <div id="map"></div>
+        </div>
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/@tmcw/togeojson@5.8.1/dist/togeojson.umd.js"></script>
+        <script>
+            const CF = {
+                NC1: {
+                    cf: "CF-1",
+                    name: "Ayikudi",
+                    color: "#be287e"
+                },
+                NC2: {
+                    cf: "CF-2",
+                    name: "Achamputhur",
+                    color: "#c0392b"
+                },
+                NC3: {
+                    cf: "CF-3",
+                    name: "Shenkottai",
+                    color: "#2463c7"
+                }
+            };
+            const units = [{
+                id: "ayikudi-town",
+                nc: "NC1",
+                name: "Ayikudi (Town Panchayat)",
+                kind: "Town Panchayat"
+            }, {
+                id: "agarakattu",
+                nc: "NC1",
+                name: "Agarakattu",
+                kind: "Village locality"
+            }, {
+                id: "ananthapuram",
+                nc: "NC1",
+                name: "Ananthapuram",
+                kind: "Village locality"
+            }, {
+                id: "kambili",
+                nc: "NC1",
+                name: "Kambili",
+                kind: "Village locality"
+            }, {
+                id: "varathan-gramam",
+                nc: "NC1",
+                name: "Varathan Gramam",
+                kind: "Village locality"
+            }, {
+                id: "desiyanagar",
+                nc: "NC1",
+                name: "Desiyanagar",
+                kind: "Village locality"
+            }, {
+                id: "thendral-nagar",
+                nc: "NC1",
+                name: "Thendral Nagar",
+                kind: "Village locality"
+            }, {
+                id: "kilangadu",
+                nc: "NC1",
+                name: "Kilangadu",
+                kind: "Village locality"
+            }, {
+                id: "vayalkattu-colony",
+                nc: "NC1",
+                name: "Vayalkattu Colony",
+                kind: "Village locality"
+            }, {
+                id: "sembur",
+                nc: "NC1",
+                name: "Sembur",
+                kind: "Village locality"
+            }, {
+                id: "balamarthanthapuram",
+                nc: "NC1",
+                name: "Balamarthanthapuram",
+                kind: "Village locality"
+            }, {
+                id: "sambavarvadakarai",
+                nc: "NC1",
+                name: "Sambavarvadakarai",
+                kind: "Village locality"
+            }, {
+                id: "melur",
+                nc: "NC1",
+                name: "Melur",
+                kind: "Village locality"
+            }, {
+                id: "keelur",
+                nc: "NC1",
+                name: "Keelur",
+                kind: "Village locality"
+            }, {
+                id: "poigai",
+                nc: "NC1",
+                name: "Poigai",
+                kind: "Village locality"
+            }, {
+                id: "achamputhur-town",
+                nc: "NC2",
+                name: "Achamputhur (Town Panchayat)",
+                kind: "Town Panchayat"
+            }, {
+                id: "mekkarai",
+                nc: "NC2",
+                name: "Mekkarai",
+                kind: "Village locality"
+            }, {
+                id: "seevanallur",
+                nc: "NC2",
+                name: "Seevanallur",
+                kind: "Village locality"
+            }, {
+                id: "thiruvettiyur",
+                nc: "NC2",
+                name: "Thiruvettiyur",
+                kind: "Village locality"
+            }, {
+                id: "elathur",
+                nc: "NC2",
+                name: "Elathur",
+                kind: "Village locality"
+            }, {
+                id: "shenkottai-municipality",
+                nc: "NC3",
+                name: "Shenkottai (Municipality)",
+                kind: "Municipality"
+            }, {
+                id: "kaalankarai",
+                nc: "NC3",
+                name: "Kaalankarai",
+                kind: "Village locality"
+            }, {
+                id: "puthur",
+                nc: "NC3",
+                name: "Puthur (Town Panchayat)",
+                kind: "Town Panchayat"
+            }, {
+                id: "rettaikulam",
+                nc: "NC3",
+                name: "Rettaikulam",
+                kind: "Village locality"
+            }, {
+                id: "moorndru-vaaikkal",
+                nc: "NC3",
+                name: "Moorndru Vaaikkal",
+                kind: "Village locality"
+            }, {
+                id: "kaduvetti",
+                nc: "NC3",
+                name: "Kaduvetti",
+                kind: "Village locality"
+            }, {
+                id: "kathiravan-colony",
+                nc: "NC3",
+                name: "Kathiravan Colony",
+                kind: "Village locality"
+            }, {
+                id: "kannupuli-mettu",
+                nc: "NC3",
+                name: "Kannupuli Mettu",
+                kind: "Village locality"
+            }, {
+                id: "nedunji",
+                nc: "NC3",
+                name: "Nedunji",
+                kind: "Village locality"
+            }, {
+                id: "iraviyadharmapuram",
+                nc: "NC3",
+                name: "Iraviyadharmapuram",
+                kind: "Village locality"
+            }, {
+                id: "poolankudiyiruppu",
+                nc: "NC3",
+                name: "Poolankudiyiruppu",
+                kind: "Village locality"
+            }, {
+                id: "lalakudiyiruppu",
+                nc: "NC3",
+                name: "Lalakudiyiruppu",
+                kind: "Village locality"
+            }, {
+                id: "kesavapuram",
+                nc: "NC3",
+                name: "Kesavapuram",
+                kind: "Village locality"
+            }, {
+                id: "keelaputhur",
+                nc: "NC3",
+                name: "Keelaputhur",
+                kind: "Village locality"
+            }, {
+                id: "melaputhur",
+                nc: "NC3",
+                name: "Melaputhur",
+                kind: "Village locality"
+            }, {
+                id: "thavanai",
+                nc: "NC3",
+                name: "Thavanai",
+                kind: "Village locality"
+            }, {
+                id: "karkudi",
+                nc: "NC3",
+                name: "Karkudi",
+                kind: "Village locality"
+            }, {
+                id: "kattalaikudiyiruppu",
+                nc: "NC3",
+                name: "Kattalaikudiyiruppu",
+                kind: "Village locality"
+            }, {
+                id: "vembanallur",
+                nc: "NC3",
+                name: "Vembanallur",
+                kind: "Village locality"
+            }, {
+                id: "puliyarai",
+                nc: "NC3",
+                name: "Puliyarai",
+                kind: "Village locality"
+            }, {
+                id: "bhavagathipuram",
+                nc: "NC3",
+                name: "Bhavagathipuram",
+                kind: "Village locality"
+            }, {
+                id: "therkkumedu",
+                nc: "NC3",
+                name: "Therkkumedu",
+                kind: "Village locality"
+            }];
+            const STORAGE = "shenkottai_leaflet_data"
+              , HISTORY = "shenkottai_cf_v5_history";
+            function emptyData() {
+                return {
+                    boundaries: {},
+                    crw: {},
+                    markers: {}
+                }
+            }
+            let data = JSON.parse(localStorage.getItem(STORAGE) || "null") || emptyData();
+            data.boundaries = data.boundaries || {};
+            data.crw = data.crw || {};
+            data.markers = data.markers || {};
+            let history = JSON.parse(localStorage.getItem(HISTORY) || "null") || {
+                undo: [],
+                redo: []
+            };
+            let map, drawn = new L.FeatureGroup(), markerLayer = new L.FeatureGroup(), measurementLayer = new L.FeatureGroup(), baseStreet, baseSatellite, placing = false, measuring = false, measurePoints = [], editSnapshot = null;
+            const $ = id => document.getElementById(id);
+            const unitById = id => units.find(u => u.id === id);
+            const colorFor = nc => CF[nc]?.color || "#64748b";
+            const areaM2 = feature => {
+                try {
+                    return turf.area(feature)
+                } catch (e) {
+                    return 0
+                }
+            }
+            ;
+            const perimeterM = feature => {
+                try {
+                    return turf.length(feature, {
+                        units: "kilometers"
+                    }) * 1000
+                } catch (e) {
+                    return 0
+                }
+            }
+            ;
+            const fmtArea = m => m >= 1e6 ? (m / 1e6).toFixed(3) + " km²" : (m / 10000).toFixed(2) + " ha";
+            function snapshot() {
+                return JSON.stringify(data)
+            }
+            function persist() {
+                localStorage.setItem(STORAGE, JSON.stringify(data));
+                renderDashboard();
+                renderRegister()
+            }
+            function persistHistory() {
+                localStorage.setItem(HISTORY, JSON.stringify(history));
+                $("undo").disabled = !history.undo.length;
+                $("redo").disabled = !history.redo.length
+            }
+            function commitBeforeChange() {
+                history.undo.push(snapshot());
+                if (history.undo.length > 80)
+                    history.undo.shift();
+                history.redo = [];
+                persistHistory()
+            }
+            function restore(raw) {
+                data = JSON.parse(raw);
+                persist();
+                redrawAll();
+                persistHistory()
+            }
+            function undo() {
+                if (!history.undo.length)
+                    return;
+                history.redo.push(snapshot());
+                restore(history.undo.pop());
+                $("drawStatus").textContent = "Last saved map change undone."
+            }
+            function redo() {
+                if (!history.redo.length)
+                    return;
+                history.undo.push(snapshot());
+                restore(history.redo.pop());
+                $("drawStatus").textContent = "Change restored."
+            }
+            function featureFor(layer, id) {
+                const g = layer.toGeoJSON();
+                g.properties = {
+                    ...(g.properties || {}),
+                    unitId: id,
+                    nc: unitById(id)?.nc,
+                    crw: data.crw[id] || ""
+                };
+                return g
+            }
+            function snapFeature(gj, ignoreId) {
+                if (!$("snap").checked)
+                    return gj;
+                const others = [];
+                Object.entries(data.boundaries).forEach( ([id,g]) => {
+                    if (id === ignoreId)
+                        return;
+                    const geom = g.geometry;
+                    if (!geom)
+                        return;
+                    const coords = geom.type === "Polygon" ? geom.coordinates.flat(1) : geom.coordinates.flat(2);
+                    coords.forEach(c => others.push(L.latLng(c[1], c[0])))
+                }
+                );
+                if (!others.length)
+                    return gj;
+                const geom = gj.geometry;
+                const walk = coords => {
+                    if (Array.isArray(coords) && typeof coords[0] === "number") {
+                        const p = map.latLngToLayerPoint([coords[1], coords[0]]);
+                        let best = null
+                          , dist = 12;
+                        others.forEach(q => {
+                            const d = p.distanceTo(map.latLngToLayerPoint(q));
+                            if (d < dist) {
+                                dist = d;
+                                best = q
+                            }
+                        }
+                        );
+                        return best ? [best.lng, best.lat] : coords
+                    }
+                    return coords.map(walk)
+                }
+                ;
+                gj.geometry.coordinates = walk(geom.coordinates);
+                return gj;
+            }
+            function styleFor(nc) {
+                return {
+                    color: colorFor(nc),
+                    weight: 2,
+                    opacity: 1,
+                    fillColor: colorFor(nc),
+                    fillOpacity: .2
+                }
+            }
+            function renderDashboard() {
+                const mapped = Object.keys(data.boundaries).filter(id => unitById(id)).length
+                  , total = units.length
+                  , area = Object.values(data.boundaries).reduce( (s, g) => s + areaM2(g), 0)
+                  , pct = total ? Math.round(mapped / total * 100) : 0;
+                $("totalUnits").textContent = total;
+                $("mappedUnits").textContent = mapped;
+                $("progressPct").textContent = pct + "%";
+                $("progressBar").style.width = pct + "%";
+                $("totalArea").textContent = (area / 1e6).toFixed(2)
+            }
+            function populateUnitSelect() {
+                const nc = $("nc").value
+                  , current = $("unit").value;
+                const filtered = units.filter(u => u.nc === nc);
+                $("unit").innerHTML = filtered.map(u => `<option value="${u.id}">${u.name}</option>`).join("");
+                if (filtered.some(u => u.id === current))
+                    $("unit").value = current;
+                $("crw").value = data.crw[$("unit").value] || ""
+            }
+            function renderRegister() {
+                const groups = ["NC1", "NC2", "NC3"];
+                $("register").innerHTML = groups.map(n => `<div style="padding:6px 0;border-bottom:1px solid #eee;color:${colorFor(n)}"><b>${n.replace("NC", "NC-")} / ${CF[n].cf} · ${CF[n].name}</b></div>` + units.filter(u => u.nc === n).map(u => `<div class="item"><span>${u.name}<br><span class="small">${data.boundaries[u.id] ? fmtArea(areaM2(data.boundaries[u.id])) + " · " + (perimeterM(data.boundaries[u.id]) / 1000).toFixed(2) + " km perimeter" : "Not mapped"} · CRW: ${data.crw[u.id] || "—"}</span></span><button class="secondary" data-pick="${u.id}">Select</button></div>`).join("")).join("");
+                document.querySelectorAll("[data-pick]").forEach(b => b.onclick = () => selectUnit(b.dataset.pick, true));
+                const marks = ["NC1", "NC2", "NC3"].map(n => `${n.replace("NC", "NC-")} · ${CF[n].name}: ${data.markers[n] ? "placed" : "not placed"}`).join("<br>");
+                $("markerList").innerHTML = marks;
+            }
+            function selectUnit(id, zoom) {
+                const u = unitById(id);
+                if (!u)
+                    return;
+                $("nc").value = u.nc;
+                populateUnitSelect();
+                $("unit").value = id;
+                $("crw").value = data.crw[id] || "";
+                if (zoom && data.boundaries[id])
+                    map.fitBounds(L.geoJSON(data.boundaries[id]).getBounds().pad(.15));
+                else if (zoom)
+                    map.setView([8.998, 77.25], 14);
+                renderRegister()
+            }
+            function redrawAll() {
+                drawn.clearLayers();
+                boundaryLayers = {};
+                Object.entries(data.boundaries).forEach( ([id,g]) => {
+                    const u = unitById(id);
+                    if (!u)
+                        return;
+                    const layer = L.geoJSON(g, {
+                        style: styleFor(u.nc),
+                        onEachFeature: (f, l) => {
+                            l._unitId = id;
+                            l.bindPopup(`<b>${u.name}</b><br>${u.nc.replace("NC", "NC-")} · ${CF[u.nc].cf}<br>Area: ${fmtArea(areaM2(g))}<br>Perimeter: ${(perimeterM(g) / 1000).toFixed(3)} km<br>CRW: ${data.crw[id] || "Not assigned"}`);
+                            l.bindTooltip(u.name, {
+                                permanent: $("showLabels").checked,
+                                direction: "center",
+                                className: "locality-label"
+                            })
+                        }
+                    });
+                    boundaryLayers[id] = layer;
+                    layer.eachLayer(l => {
+                        l._unitId = id
+                    }
+                    )
+                }
+                );
+                markerLayer.clearLayers();
+                Object.entries(data.markers).forEach( ([nc,pos]) => {
+                    const mk = L.marker([pos.lat, pos.lng]).bindPopup(`<b>${nc.replace("NC", "NC-")}</b> · ${CF[nc].name} · ${CF[nc].cf}`);
+                    markerLayer.addLayer(mk)
+                }
+                );
+                applyLayers();
+                renderDashboard();
+                renderRegister();
+                persistHistory();
+            }
+            function applyLayers() {
+                Object.entries(boundaryLayers).forEach( ([id,layer]) => {
+                    const u = unitById(id)
+                      , visible = u && $("show" + u.nc).checked;
+                    if (visible) {
+                        if (!drawn.hasLayer(layer))
+                            drawn.addLayer(layer)
+                    } else
+                        drawn.removeLayer(layer);
+                    layer.eachLayer?.(sub => {
+                        const tip = sub.getTooltip?.();
+                        if (tip) {
+                            if ($("showLabels").checked && visible)
+                                sub.openTooltip();
+                            else
+                                sub.closeTooltip()
+                        }
+                    }
+                    )
+                }
+                );
+                if ($("showMarkers").checked) {
+                    if (!map.hasLayer(markerLayer))
+                        markerLayer.addTo(map)
+                } else
+                    map.removeLayer(markerLayer)
+            }
+            function zoomToUnit(u) {
+                if (data.boundaries[u.id])
+                    map.fitBounds(L.geoJSON(data.boundaries[u.id]).getBounds().pad(.2));
+                else
+                    map.setView([8.998, 77.25], 14);
+                $("drawStatus").textContent = data.boundaries[u.id] ? "Zoomed to " + u.name + "." : "No boundary saved for " + u.name + " yet. Map centred on Shenkottai."
+            }
+            function saveAllocation() {
+                const id = $("unit").value
+                  , next = $("crw").value.trim();
+                if ((data.crw[id] || "") === next)
+                    return;
+                commitBeforeChange();
+                data.crw[id] = next;
+                persist();
+                redrawAll();
+                $("drawStatus").textContent = "CRW allocation saved."
+            }
+            function updateBoundaryFromEdited(l) {
+                const gj = l.toGeoJSON()
+                  , id = gj.properties?.unitId || $("unit").value;
+                if (unitById(id)) {
+                    const snapped = snapFeature(featureFor(l, id), id);
+                    data.boundaries[id] = snapped
+                }
+            }
+            function startMeasure() {
+                measuring = true;
+                measurePoints = [];
+                measurementLayer.clearLayers();
+                $("measureOut").textContent = "Click map points to measure a route. Double-click or press Finish measurement.";
+                $("measureStart").textContent = "Finish measurement"
+            }
+            function finishMeasure() {
+                measuring = false;
+                $("measureStart").textContent = "Start measuring";
+                if (measurePoints.length < 2) {
+                    $("measureOut").textContent = "Add at least two points.";
+                    return
+                }
+                const line = turf.lineString(measurePoints.map(p => [p.lng, p.lat]));
+                const km = turf.length(line, {
+                    units: "kilometers"
+                });
+                $("measureOut").textContent = `Distance: ${(km * 1000).toFixed(1)} metres (${km.toFixed(3)} km) · ${measurePoints.length} points`
+            }
+            function clearMeasure() {
+                measuring = false;
+                measurePoints = [];
+                measurementLayer.clearLayers();
+                $("measureStart").textContent = "Start measuring";
+                $("measureOut").textContent = "No measurement yet."
+            }
+            function exportBlob(name, content, type) {
+                const a = document.createElement("a")
+                  , url = URL.createObjectURL(new Blob([content],{
+                    type
+                }));
+                a.href = url;
+                a.download = name;
+                a.click();
+                setTimeout( () => URL.revokeObjectURL(url), 1000)
+            }
+            function exportGeoJSON() {
+                const features = Object.entries(data.boundaries).map( ([id,g]) => {
+                    const u = unitById(id);
+                    return {
+                        ...g,
+                        properties: {
+                            ...(g.properties || {}),
+                            unitId: id,
+                            locality: u?.name,
+                            nc: u?.nc,
+                            cf: CF[u?.nc]?.cf,
+                            crw: data.crw[id] || ""
+                        }
+                    }
+                }
+                );
+                exportBlob("Shenkottai_CF_Boundaries.geojson", JSON.stringify({
+                    type: "FeatureCollection",
+                    features
+                }, null, 2), "application/geo+json")
+            }
+            function exportKML() {
+                const esc = s => String(s).replace(/[&<>"]/g, c => ({
+                    "&": "&amp;",
+                    "<": "&lt;",
+                    ">": "&gt;",
+                    '"': "&quot;"
+                }[c]));
+                let placemarks = "";
+                Object.entries(data.boundaries).forEach( ([id,g]) => {
+                    const u = unitById(id);
+                    if (!u)
+                        return;
+                    const rings = g.geometry.coordinates;
+                    const ring = rings[0].map(c => c.join(",0")).join(" ");
+                    placemarks += `<Placemark><name>${esc(u.name)}</name><description>${esc(u.nc)} / ${esc(CF[u.nc].cf)}; CRW ${esc(data.crw[id] || "")}</description><Polygon><outerBoundaryIs><LinearRing><coordinates>${ring}</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>`
+                }
+                );
+                exportBlob("Shenkottai_CF_Boundaries.kml", `<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document>${placemarks}</Document></kml>`, "application/vnd.google-earth.kml+xml")
+            }
+            function importGeoJSON(obj) {
+                let feats = obj.type === "FeatureCollection" ? obj.features : obj.type === "Feature" ? [obj] : [];
+                if (!feats.length)
+                    throw Error("No GeoJSON features found.");
+                commitBeforeChange();
+                feats.forEach(f => {
+                    const props = f.properties || {}
+                      , id = props.unitId || units.find(u => u.name.toLowerCase() === (props.locality || props.name || "").toLowerCase())?.id;
+                    if (id && unitById(id)) {
+                        data.boundaries[id] = {
+                            ...f,
+                            properties: {
+                                ...props,
+                                unitId: id,
+                                nc: unitById(id).nc
+                            }
+                        };
+                        if (props.crw)
+                            data.crw[id] = props.crw
+                    }
+                }
+                );
+                persist();
+                redrawAll()
+            }
+            function importKML(text) {
+                const xml = new DOMParser().parseFromString(text, "text/xml");
+                if (!window.toGeoJSON)
+                    throw Error("KML converter not loaded.");
+                const gj = toGeoJSON.kml(xml);
+                importGeoJSON(gj)
+            }
+            function exportExcel() {
+                if (!window.XLSX) {
+                    alert("Excel library unavailable. Check internet connection.");
+                    return
+                }
+                const rows = units.map(u => ({
+                    Locality: u.name,
+                    NC: u.nc,
+                    CF: CF[u.nc].cf,
+                    CRW: data.crw[u.id] || "",
+                    Mapped: !!data.boundaries[u.id],
+                    Area_m2: data.boundaries[u.id] ? Math.round(areaM2(data.boundaries[u.id])) : "",
+                    Perimeter_km: data.boundaries[u.id] ? (perimeterM(data.boundaries[u.id]) / 1000).toFixed(3) : ""
+                }));
+                const ws = XLSX.utils.json_to_sheet(rows)
+                  , wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Coverage");
+                XLSX.writeFile(wb, "Shenkottai_CF_Coverage.xlsx")
+            }
+            function importExcel(file) {
+                if (!window.XLSX) {
+                    alert("Excel library unavailable. Check internet connection.");
+                    return
+                }
+                const reader = new FileReader();
+                reader.onload = e => {
+                    try {
+                        const wb = XLSX.read(e.target.result, {
+                            type: "array"
+                        })
+                          , rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+                        let changed = 0;
+                        commitBeforeChange();
+                        rows.forEach(r => {
+                            const name = String(r.Locality || r.locality || r.Name || r.name || "").trim();
+                            const u = units.find(x => x.name.toLowerCase() === name.toLowerCase());
+                            if (!u)
+                                return;
+                            const crw = r.CRW ?? r.crw;
+                            if (crw !== undefined)
+                                data.crw[u.id] = String(crw);
+                            changed++
+                        }
+                        );
+                        persist();
+                        redrawAll();
+                        alert(`Imported allocation details for ${changed} matching localities. Boundary geometry was not changed.`)
+                    } catch (err) {
+                        alert("Could not read this Excel file: " + err.message)
+                    }
+                }
+                ;
+                reader.readAsArrayBuffer(file)
+            }
+            // Initialise locality selectors and search index.
+            $("unit").innerHTML = units.filter(u => u.nc === "NC1").map(u => `<option value="${u.id}">${u.name}</option>`).join("");
+            $("localityOptions").innerHTML = units.map(u => `<option value="${u.name}">`).join("");
+            map = L.map("map").setView([8.998, 77.25], 13);
+            baseStreet = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+                maxZoom: 19,
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            });
+            baseSatellite = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+                maxZoom: 19,
+                attribution: 'Tiles &copy; Esri'
+            });
+            baseStreet.addTo(map);
+            drawn.addTo(map);
+            markerLayer.addTo(map);
+            measurementLayer.addTo(map);
+            const drawControl = new L.Control.Draw({
+                position: "topleft",
+                draw: {
+                    polyline: false,
+                    rectangle: false,
+                    circle: false,
+                    circlemarker: false,
+                    marker: false,
+                    polygon: {
+                        allowIntersection: false,
+                        showArea: true,
+                        shapeOptions: {
+                            color: "#be287e",
+                            fillOpacity: .2
+                        }
+                    }
+                },
+                edit: {
+                    featureGroup: drawn,
+                    edit: true,
+                    remove: false
+                }
+            });
+            map.addControl(drawControl);
+            map.on(L.Draw.Event.CREATED, e => {
+                const id = $("unit").value
+                  , u = unitById(id);
+                if (!u) {
+                    alert("Select a locality first.");
+                    return
+                }
+                commitBeforeChange();
+                let gj = featureFor(e.layer, id);
+                gj = snapFeature(gj, id);
+                data.boundaries[id] = gj;
+                persist();
+                redrawAll();
+                $("drawStatus").textContent = "Boundary saved for " + u.name + " · " + fmtArea(areaM2(gj))
+            }
+            );
+            map.on(L.Draw.Event.EDITSTART, () => {
+                editSnapshot = snapshot()
+            }
+            );
+            map.on(L.Draw.Event.EDITED, e => {
+                if (editSnapshot) {
+                    history.undo.push(editSnapshot);
+                    if (history.undo.length > 80)
+                        history.undo.shift();
+                    history.redo = [];
+                    editSnapshot = null;
+                    persistHistory()
+                }
+                e.layers.eachLayer(l => updateBoundaryFromEdited(l));
+                persist();
+                redrawAll();
+                $("drawStatus").textContent = "Boundary edits saved with snapping applied."
+            }
+            );
+            map.on("click", e => {
+                if (placing) {
+                    const nc = $("markerType").value;
+                    commitBeforeChange();
+                    data.markers[nc] = {
+                        lat: e.latlng.lat,
+                        lng: e.latlng.lng
+                    };
+                    placing = false;
+                    persist();
+                    redrawAll();
+                    $("drawStatus").textContent = nc + " marker placed.";
+                    return
+                }
+                if (measuring) {
+                    measurePoints.push(e.latlng);
+                    L.circleMarker(e.latlng, {
+                        radius: 4,
+                        color: "#f59e0b"
+                    }).addTo(measurementLayer);
+                    if (measurePoints.length > 1)
+                        L.polyline(measurePoints, {
+                            color: "#f59e0b",
+                            dashArray: "5,5"
+                        }).addTo(measurementLayer);
+                    const line = measurePoints.length > 1 ? turf.length(turf.lineString(measurePoints.map(p => [p.lng, p.lat])), {
+                        units: "kilometers"
+                    }) : 0;
+                    $("measureOut").textContent = `${measurePoints.length} points · ${(line * 1000).toFixed(1)} m`;
+                }
+            }
+            );
+            map.on("dblclick", () => {
+                if (measuring)
+                    finishMeasure()
+            }
+            );
+            $("nc").onchange = populateUnitSelect;
+            $("unit").onchange = () => $("crw").value = data.crw[$("unit").value] || "";
+            $("saveAllocation").onclick = saveAllocation;
+            $("deleteBoundary").onclick = () => {
+                const id = $("unit").value;
+                if (!data.boundaries[id]) {
+                    alert("No boundary saved for this locality.");
+                    return
+                }
+                if (confirm("Delete boundary for " + unitById(id).name + "?")) {
+                    commitBeforeChange();
+                    delete data.boundaries[id];
+                    persist();
+                    redrawAll()
+                }
+            }
+            ;
+            $("undo").onclick = undo;
+            $("redo").onclick = redo;
+            $("findBtn").onclick = () => {
+                const q = $("search").value.trim().toLowerCase()
+                  , u = units.find(x => x.name.toLowerCase() === q) || units.find(x => x.name.toLowerCase().includes(q));
+                if (!u) {
+                    alert("No matching locality. Try its full name.");
+                    return
+                }
+                selectUnit(u.id, true)
+            }
+            ;
+            $("search").addEventListener("keydown", e => {
+                if (e.key === "Enter")
+                    $("findBtn").click()
+            }
+            );
+            $("clearSearch").onclick = () => $("search").value = "";
+            ["NC1", "NC2", "NC3"].forEach(n => $("show" + n).onchange = applyLayers);
+            $("showMarkers").onchange = applyLayers;
+            $("showLabels").onchange = () => {
+                redrawAll()
+            }
+            ;
+            $("street").onclick = () => {
+                map.removeLayer(baseSatellite);
+                baseStreet.addTo(map)
+            }
+            ;
+            $("satellite").onclick = () => {
+                map.removeLayer(baseStreet);
+                baseSatellite.addTo(map)
+            }
+            ;
+            $("measureStart").onclick = () => measuring ? finishMeasure() : startMeasure();
+            $("measureClear").onclick = clearMeasure;
+            $("placeMarker").onclick = () => {
+                placing = true;
+                measuring = false;
+                $("drawStatus").textContent = "Click the map to place " + $("markerType").value
+            }
+            ;
+            $("cancelMarker").onclick = () => {
+                placing = false
+            }
+            ;
+            $("print").onclick = () => {
+                map.invalidateSize();
+                window.print()
+            }
+            ;
+            $("exportJson").onclick = () => exportBlob("Shenkottai_CF_Map_Backup.json", JSON.stringify({
+                version: 5,
+                block: "Shenkottai",
+                units,
+                data
+            }, null, 2), "application/json");
+            $("importJson").onclick = () => $("jsonFile").click();
+            $("importGeo").onclick = () => $("jsonFile").click();
+            $("jsonFile").onchange = async e => {
+                const f = e.target.files[0];
+                if (!f)
+                    return;
+                try {
+                    const t = await f.text();
+                    if (f.name.toLowerCase().endsWith(".kml") || f.name.toLowerCase().endsWith(".xml"))
+                        importKML(t);
+                    else {
+                        const j = JSON.parse(t);
+                        if (j.boundaries && j.markers) {
+                            commitBeforeChange();
+                            data = j;
+                            persist();
+                            redrawAll()
+                        } else
+                            importGeoJSON(j)
+                    }
+                    alert("Import completed.")
+                } catch (err) {
+                    alert("Import failed: " + err.message)
+                }
+                e.target.value = ""
+            }
+            ;
+            $("exportGeo").onclick = exportGeoJSON;
+            $("exportKml").onclick = exportKML;
+            $("exportExcel").onclick = exportExcel;
+            $("importExcel").onclick = () => $("excelFile").click();
+            $("excelFile").onchange = e => {
+                if (e.target.files[0])
+                    importExcel(e.target.files[0]);
+                e.target.value = ""
+            }
+            ;
+            populateUnitSelect();
+            renderDashboard();
+            renderRegister();
+            redrawAll();
+            persistHistory();
+        </script>
+    </body>
+</html>
